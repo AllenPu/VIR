@@ -35,7 +35,7 @@ from loss import *
 from datasets import AgeDB
 from utils import *
 from evidential_deep_learning import *
-
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 # os.environ["KMP_WARNINGS"] = "FALSE"
@@ -78,7 +78,7 @@ parser.add_argument('--lambda_reg', type=float, default=0.01, help='lambda for r
 
 # training/optimization related
 parser.add_argument('--dataset', type=str, default='agedb', choices=['imdb_wiki', 'agedb'], help='dataset name')
-parser.add_argument('--data_dir', type=str, default='./data/', help='data directory')
+parser.add_argument('--data_dir', type=str, default='/home/rpu2/scratch/data/imbalanced-regression/agedb-dir/data', help='data directory')
 parser.add_argument('--model', type=str, default='resnet50', help='model name')
 parser.add_argument('--store_root', type=str, default='/data/local/ziyan/checkpoint', help='root path for storing checkpoints, logs')
 parser.add_argument('--store_name', type=str, default='', help='experiment store name')
@@ -163,7 +163,7 @@ np.set_printoptions(threshold=sys.maxsize)
 torch.set_printoptions(threshold=sys.maxsize)
 torch.set_printoptions(precision=10)
 
-device = torch.device(f'cuda:{args.gpu}')
+#device = torch.device(f'cuda:{args.gpu}')
 
 def train(train_loader, model, optimizer, epoch):
     batch_time = AverageMeter('Time', ':6.2f')
@@ -627,6 +627,141 @@ def shot_metrics(preds, labels, train_labels, variance=None, edl_params=None, ma
     return shot_dict
 
 
+
+#####################################
+def per_label_frobenius_norm(features, labels):
+    """
+    features: Tensor of shape (N, D)
+    labels: Tensor of shape (N,)
+    Returns: dict {label: avg Frobenius norm}
+    """
+    features = features.view(features.size(0), -1)  # Ensure shape (N, D)
+    labels = labels.view(-1)  # Ensure shape (N,)
+
+    unique_labels = labels.unique()
+    frob_norms = {}
+
+    for label in unique_labels:
+        mask = labels == label
+        feats = features[mask]  # (n_c, D)
+        if feats.size(0) == 0:
+            continue
+        norms = torch.norm(feats, p='fro', dim=1)  # L2 norm per row
+        avg = norms.mean().item()
+        frob_norms[int(label.item())] = avg
+
+    frob_norm = {key  : frob_norms[key] for key in sorted(frob_norms.keys())}
+
+    return frob_norm
+
+
+
+#####################################
+def cal_per_label_Frob(model, train_loader):
+    model.eval()
+    feature, label = [], []
+    with torch.no_grad():
+        for idx, (x, y, _) in enumerate(train_loader):
+            x = x.to(device)
+            _, z_pred = model(x)
+            feature.append(z_pred.cpu())
+            label.append(y)
+        features = torch.cat(feature, dim=0)
+        labels = torch.cat(label)
+    frob_norm = per_label_frobenius_norm(features, labels)
+    return frob_norm
+
+
+
+#####################################
+def cal_per_label_mae(model, train_loader):
+    """
+    #output: Tensor of shape (N, 1)
+    #target: Tensor of shape (N,) with M unique labels
+    Returns: dict mapping each label to its MAE
+    """
+    output, target = [], []
+    with torch.no_grad():
+        for idx, (x, y, _) in enumerate(train_loader):
+            x = x.to(device)
+            y_pred, _ = model(x)
+            #print(y_pred)
+            target.extend(y.squeeze(-1).tolist())
+            output.extend(y_pred.cpu().squeeze(-1).tolist())
+            
+        N = len(target)
+        #print(f'N is {N}')
+        output = torch.tensor(output).reshape(N,)  # (N,)
+        target = torch.tensor(target).reshape(N,)  # (N,)
+
+        unique_labels = target.unique()
+        mae_dict = {}
+
+        for label in unique_labels:
+            mask = target == label
+            if mask.sum() == 0:
+                continue
+            pred_subset = output[mask]
+            true_subset = target[mask].float()
+            mae = torch.abs(pred_subset - true_subset).mean()
+            mae_dict[int(label.item())] = mae.item()
+    #
+    return mae_dict
+
+
+def cal_MAE_and_Frobs(model_regression, train_loader, test_loader):
+    per_label_MAE_train = cal_per_label_mae(model_regression, train_loader)
+    print('===============train key MAE============='+'\n')
+    k_train = [k for k in per_label_MAE_train.keys()]
+    print(f'k_train is {k_train}')
+    v_train = [per_label_MAE_train[k] for k in per_label_MAE_train.keys()]
+    print(f'v_train is {v_train}')
+    print('===============train MAE============='+'\n')
+    per_label_MAE_test = cal_per_label_mae(model_regression, test_loader)
+    print('===============test key MAE============='+'\n')
+    k_test = [k for k in per_label_MAE_test.keys()]
+    print(f'k_test is {k_test}')
+    v_test = [per_label_MAE_test[k] for k in per_label_MAE_test.keys()]
+    print(f'v_test is {v_test}')
+    print('===============test MAE============='+'\n')
+    #
+    per_label_Frobs_train = cal_per_label_Frob(model_regression, train_loader)
+    per_label_Frobs_test = cal_per_label_Frob(model_regression, test_loader)
+    k_frobs_train = [k for k in per_label_Frobs_train.keys()]
+    k_frobs_test = [k for k in per_label_Frobs_test.keys()]
+    v_frobs_train = [per_label_Frobs_train[k] for k in per_label_Frobs_train.keys()]
+    v_frobs_test = [per_label_Frobs_train[k] for k in per_label_Frobs_test.keys()]
+    print('===============train frobs key============='+'\n')
+    print(f'k_frobs_train is {k_frobs_train}')
+    print('===============train frobs============='+'\n')
+    print(f'v_frobs_train is {v_frobs_train}')
+    print('===============test frobs key============='+'\n')
+    print(f'k_frobs_test is {k_frobs_test}')
+    print('===============test frobs============='+'\n')
+    print(f'v_frobs_test is {v_frobs_test}')
+
+    ####
+    df_train = pd.DataFrame({
+        "train MAE labels" : k_train,
+        "train MAE" : v_train,
+        "train Frobs" : v_frobs_train,
+    })
+
+    df_test = pd.DataFrame({
+        "test MSE labels" : k_test,
+        "test MAE" : v_test,
+        "test Frobs" : v_frobs_test
+    })
+
+
+    df_train.to_csv("ranksim_train.csv", index=False)
+    df_test.to_csv("ranksim_test.csv", index=False)
+
+    return
+
+
+
+
 def main():
     # Data
     print('=====> Preparing data...')
@@ -665,16 +800,19 @@ def main():
                      use_cdm=args.use_cdm, use_prm=args.use_prm, use_recons=args.use_recons, device=device).to(device)
 
     # model = DistributedDataParallel(model, find_unused_parameters=True, device_ids=[args.local_rank], output_device=args.local_rank)
-
-    model = nn.DataParallel(model, device_ids=[args.gpu])
+    model = model.to(device)
+    #model = nn.DataParallel(model, device_ids=[args.gpu])
 
     # evaluate only
     if args.evaluate:
         assert args.resume, 'Specify a trained model using [args.resume]'
-        checkpoint = torch.load(args.resume)
+        #checkpoint = torch.load(args.resume)
+        checkpoint = torch.load('/home/rpu2/scratch/code/vir_agedb/ckpt.best.pth.tar')
         model.load_state_dict(checkpoint['state_dict'], strict=False)
         print(f"===> Checkpoint '{args.resume}' loaded (epoch [{checkpoint['epoch']}]), testing...")
         validate(test_loader, model, train_labels=train_labels, prefix='Test')
+        #
+        cal_MAE_and_Frobs(model, train_loader, test_loader)
         return
 
     if args.retrain_fc:
@@ -798,5 +936,6 @@ def main():
         print(f"Test loss: MSE [{test_loss_mse:.4f}], L1 [{test_loss_l1:.4f}], G-Mean [{test_loss_gmean:.4f}]\nDone")
 
     # cleanup()
+
 
 main()
