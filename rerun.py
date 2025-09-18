@@ -80,7 +80,7 @@ parser.add_argument('--lambda_reg', type=float, default=0.01, help='lambda for r
 parser.add_argument('--dataset', type=str, default='agedb', choices=['imdb_wiki', 'agedb'], help='dataset name')
 parser.add_argument('--data_dir', type=str, default='/home/rpu2/scratch/data/imbalanced-regression/agedb-dir/data', help='data directory')
 parser.add_argument('--model', type=str, default='resnet50', help='model name')
-parser.add_argument('--store_root', type=str, default='/data/local/ziyan/checkpoint', help='root path for storing checkpoints, logs')
+parser.add_argument('--store_root', type=str, default='./pretrained', help='root path for storing checkpoints, logs')
 parser.add_argument('--store_name', type=str, default='', help='experiment store name')
 parser.add_argument('--gpu', type=int, default=6)
 parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd'], help='optimizer type')
