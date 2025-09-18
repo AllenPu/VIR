@@ -808,7 +808,6 @@ def main():
         #assert args.resume, 'Specify a trained model using [args.resume]'
         #checkpoint = torch.load(args.resume)
         checkpoint = torch.load('/home/rpu2/scratch/code/VIR/pretrained/ckpt.best.pth.tar', map_location='cpu')
-        checkpoint.cuda()
         model.load_state_dict(checkpoint['state_dict'], strict=False)
         print(f"===> Checkpoint '{args.resume}' loaded (epoch [{checkpoint['epoch']}]), testing...")
         #validate(test_loader, model, train_labels=train_labels, prefix='Test')
