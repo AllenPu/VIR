@@ -345,6 +345,9 @@ def validate(val_loader, model, cali_model=None, train_labels=None, prefix='Val'
             labels.extend(targets.data.cpu().numpy())
             if args.use_edl:
                 outputs = model(inputs)
+                #
+                print('shape of the output', outputs.shape)
+                #
                 if args.use_cdm:
                     gamma, v, alpha, beta = globals()["get_normal_output"](outputs, False, None, **prior_dict)
                 else:
@@ -375,6 +378,7 @@ def validate(val_loader, model, cali_model=None, train_labels=None, prefix='Val'
 
             else:
                 outputs = model(inputs)
+                print(' not use edl shape is :', outputs.shape)
                 preds.extend(outputs.data.cpu().numpy())
                 loss_mse = criterion_mse(outputs, targets)
                 loss_l1 = criterion_l1(outputs, targets)
@@ -810,7 +814,7 @@ def main():
         checkpoint = torch.load('/home/rpu2/scratch/code/VIR/pretrained/ckpt.best.pth.tar', map_location='cpu')
         model.load_state_dict(checkpoint['state_dict'], strict=False)
         print(f"===> Checkpoint '{args.resume}' loaded (epoch [{checkpoint['epoch']}]), testing...")
-        #validate(test_loader, model, train_labels=train_labels, prefix='Test')
+        validate(test_loader, model, train_labels=train_labels, prefix='Test')
         #
         cal_MAE_and_Frobs(model, train_loader, test_loader)
         return
