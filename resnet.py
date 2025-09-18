@@ -340,7 +340,7 @@ class ResNet(nn.Module):
                 else:
                     return x, None, None
         else:
-            return x, encoding
+            return x, None, None, encoding
 
 
 

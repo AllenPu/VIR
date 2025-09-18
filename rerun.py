@@ -346,7 +346,7 @@ def validate(val_loader, model, cali_model=None, train_labels=None, prefix='Val'
             if args.use_edl:
                 outputs = model(inputs)
                 #
-                print('shape of the output', outputs.shape)
+                #print('shape of the output', outputs.shape)
                 #
                 if args.use_cdm:
                     gamma, v, alpha, beta = globals()["get_normal_output"](outputs, False, None, **prior_dict)
@@ -667,7 +667,9 @@ def cal_per_label_Frob(model, train_loader):
     with torch.no_grad():
         for idx, (x, y, _) in enumerate(train_loader):
             x = x.to(device)
-            _, z_pred = model(x)
+            #
+            # pred, none, none, encoding
+            _,_, _, z_pred = model(x)
             feature.append(z_pred.cpu())
             label.append(y)
         features = torch.cat(feature, dim=0)
@@ -688,7 +690,8 @@ def cal_per_label_mae(model, train_loader):
     with torch.no_grad():
         for idx, (x, y, _) in enumerate(train_loader):
             x = x.to(device)
-            y_pred, _ = model(x)
+            # pred, none, none, encoding
+            y_pred, _, _, _ = model(x)
             #print(y_pred)
             target.extend(y.squeeze(-1).tolist())
             output.extend(y_pred.cpu().squeeze(-1).tolist())
