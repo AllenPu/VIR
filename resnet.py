@@ -338,7 +338,7 @@ class ResNet(nn.Module):
                 if self.use_recons:
                     return x, None, None, x_recons
                 else:
-                    return x, None, None
+                    return x, None, None, encoding
         else:
             return x, None, None, encoding
 
