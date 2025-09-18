@@ -794,7 +794,7 @@ def main():
 
     # Model
     print('=====> Building model...')
-    model = resnet50(fds=args.fds, bucket_num=args.bucket_num, bucket_start=args.bucket_start,
+    model = resnet18(fds=args.fds, bucket_num=args.bucket_num, bucket_start=args.bucket_start,
                      start_update=args.start_update, start_smooth=args.start_smooth, kernel=args.fds_kernel,
                      ks=args.fds_ks, sigma=args.fds_sigma, momentum=args.fds_mmt, use_edl=args.use_edl,
                      use_cdm=args.use_cdm, use_prm=args.use_prm, use_recons=args.use_recons, device=device).to(device)
@@ -805,12 +805,12 @@ def main():
 
     # evaluate only
     if args.evaluate:
-        assert args.resume, 'Specify a trained model using [args.resume]'
+        #assert args.resume, 'Specify a trained model using [args.resume]'
         #checkpoint = torch.load(args.resume)
-        checkpoint = torch.load('/home/rpu2/scratch/code/vir_agedb/ckpt.best.pth.tar')
+        checkpoint = torch.load('/home/rpu2/scratch/code/VIR/pretrained/ckpt.best.pth.tar')
         model.load_state_dict(checkpoint['state_dict'], strict=False)
         print(f"===> Checkpoint '{args.resume}' loaded (epoch [{checkpoint['epoch']}]), testing...")
-        validate(test_loader, model, train_labels=train_labels, prefix='Test')
+        #validate(test_loader, model, train_labels=train_labels, prefix='Test')
         #
         cal_MAE_and_Frobs(model, train_loader, test_loader)
         return
