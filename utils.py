@@ -11,6 +11,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 def cleanup():
     torch.distributed.destroy_process_group()
 
@@ -211,3 +214,139 @@ def get_lds_kernel_window(kernel, ks, sigma, bins):
 
     kernel_window = kernel_window_bins
     return kernel_window
+
+
+
+#####################################
+def per_label_frobenius_norm(features, labels):
+    """
+    features: Tensor of shape (N, D)
+    labels: Tensor of shape (N,)
+    Returns: dict {label: avg Frobenius norm}
+    """
+    features = features.view(features.size(0), -1)  # Ensure shape (N, D)
+    labels = labels.view(-1)  # Ensure shape (N,)
+
+    unique_labels = labels.unique()
+    frob_norms = {}
+
+    for label in unique_labels:
+        mask = labels == label
+        feats = features[mask]  # (n_c, D)
+        if feats.size(0) == 0:
+            continue
+        norms = torch.norm(feats, p='fro', dim=1)  # L2 norm per row
+        avg = norms.mean().item()
+        frob_norms[int(label.item())] = avg
+
+    frob_norm = {key  : frob_norms[key] for key in sorted(frob_norms.keys())}
+
+    return frob_norm
+
+
+
+#####################################
+def cal_per_label_Frob(model, train_loader):
+    model.eval()
+    feature, label = [], []
+    with torch.no_grad():
+        for idx, (x, y, _) in enumerate(train_loader):
+            x = x.to(device)
+            #
+            # pred, none, none, encoding
+            _,_, _, z_pred = model(x)
+            feature.append(z_pred.cpu())
+            label.append(y)
+        features = torch.cat(feature, dim=0)
+        labels = torch.cat(label)
+    frob_norm = per_label_frobenius_norm(features, labels)
+    return frob_norm
+
+
+
+#####################################
+def cal_per_label_mae(model, train_loader):
+    """
+    #output: Tensor of shape (N, 1)
+    #target: Tensor of shape (N,) with M unique labels
+    Returns: dict mapping each label to its MAE
+    """
+    output, target = [], []
+    with torch.no_grad():
+        for idx, (x, y, _) in enumerate(train_loader):
+            x = x.to(device)
+            # pred, none, none, encoding
+            y_pred, _, _, _ = model(x)
+            #print(y_pred)
+            target.extend(y.squeeze(-1).tolist())
+            output.extend(y_pred.cpu().squeeze(-1).tolist())
+            
+        N = len(target)
+        #print(f'N is {N}')
+        output = torch.tensor(output).reshape(N,)  # (N,)
+        target = torch.tensor(target).reshape(N,)  # (N,)
+
+        unique_labels = target.unique()
+        mae_dict = {}
+
+        for label in unique_labels:
+            mask = target == label
+            if mask.sum() == 0:
+                continue
+            pred_subset = output[mask]
+            true_subset = target[mask].float()
+            mae = torch.abs(pred_subset - true_subset).mean()
+            mae_dict[int(label.item())] = mae.item()
+    #
+    return mae_dict
+
+
+def cal_MAE_and_Frobs(model_regression, train_loader, test_loader):
+    per_label_MAE_train = cal_per_label_mae(model_regression, train_loader)
+    print('===============train key MAE============='+'\n')
+    k_train = [k for k in per_label_MAE_train.keys()]
+    print(f'k_train is {k_train}')
+    v_train = [per_label_MAE_train[k] for k in per_label_MAE_train.keys()]
+    print(f'v_train is {v_train}')
+    print('===============train MAE============='+'\n')
+    per_label_MAE_test = cal_per_label_mae(model_regression, test_loader)
+    print('===============test key MAE============='+'\n')
+    k_test = [k for k in per_label_MAE_test.keys()]
+    print(f'k_test is {k_test}')
+    v_test = [per_label_MAE_test[k] for k in per_label_MAE_test.keys()]
+    print(f'v_test is {v_test}')
+    print('===============test MAE============='+'\n')
+    #
+    per_label_Frobs_train = cal_per_label_Frob(model_regression, train_loader)
+    per_label_Frobs_test = cal_per_label_Frob(model_regression, test_loader)
+    k_frobs_train = [k for k in per_label_Frobs_train.keys()]
+    k_frobs_test = [k for k in per_label_Frobs_test.keys()]
+    v_frobs_train = [per_label_Frobs_train[k] for k in per_label_Frobs_train.keys()]
+    v_frobs_test = [per_label_Frobs_train[k] for k in per_label_Frobs_test.keys()]
+    print('===============train frobs key============='+'\n')
+    print(f'k_frobs_train is {k_frobs_train}')
+    print('===============train frobs============='+'\n')
+    print(f'v_frobs_train is {v_frobs_train}')
+    print('===============test frobs key============='+'\n')
+    print(f'k_frobs_test is {k_frobs_test}')
+    print('===============test frobs============='+'\n')
+    print(f'v_frobs_test is {v_frobs_test}')
+
+    ####
+    df_train = pd.DataFrame({
+        "train MAE labels" : k_train,
+        "train MAE" : v_train,
+        "train Frobs" : v_frobs_train,
+    })
+
+    df_test = pd.DataFrame({
+        "test MSE labels" : k_test,
+        "test MAE" : v_test,
+        "test Frobs" : v_frobs_test
+    })
+
+
+    df_train.to_csv("VIR_train.csv", index=False)
+    df_test.to_csv("VIR_test.csv", index=False)
+
+    return
