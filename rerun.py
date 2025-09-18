@@ -794,7 +794,7 @@ def main():
 
     # Model
     print('=====> Building model...')
-    model = resnet18(fds=args.fds, bucket_num=args.bucket_num, bucket_start=args.bucket_start,
+    model = resnet50(fds=args.fds, bucket_num=args.bucket_num, bucket_start=args.bucket_start,
                      start_update=args.start_update, start_smooth=args.start_smooth, kernel=args.fds_kernel,
                      ks=args.fds_ks, sigma=args.fds_sigma, momentum=args.fds_mmt, use_edl=args.use_edl,
                      use_cdm=args.use_cdm, use_prm=args.use_prm, use_recons=args.use_recons, device=device).to(device)
