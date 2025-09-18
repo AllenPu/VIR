@@ -817,7 +817,7 @@ def main():
         checkpoint = torch.load('/home/rpu2/scratch/code/VIR/pretrained/ckpt.best.pth.tar', map_location='cpu')
         model.load_state_dict(checkpoint['state_dict'], strict=False)
         print(f"===> Checkpoint '{args.resume}' loaded (epoch [{checkpoint['epoch']}]), testing...")
-        validate(test_loader, model, train_labels=train_labels, prefix='Test')
+        #validate(test_loader, model, train_labels=train_labels, prefix='Test')
         #
         cal_MAE_and_Frobs(model, train_loader, test_loader)
         return
