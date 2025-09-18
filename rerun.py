@@ -49,7 +49,7 @@ parser.add_argument('--lds_kernel', type=str, default='gaussian',
 parser.add_argument('--lds_ks', type=int, default=5, help='LDS kernel size: should be odd number')
 parser.add_argument('--lds_sigma', type=float, default=2, help='LDS gaussian/laplace kernel sigma')
 # FDS
-parser.add_argument('--fds', action='store_true', default=True, help='whether to enable FDS')
+parser.add_argument('--fds', action='store_true', default=False, help='whether to enable FDS')
 parser.add_argument('--fds_kernel', type=str, default='gaussian',
                     choices=['gaussian', 'triang', 'laplace'], help='FDS kernel type')
 parser.add_argument('--fds_ks', type=int, default=5, help='FDS kernel size: should be odd number')
